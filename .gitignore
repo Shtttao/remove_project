@@ -1,0 +1,11 @@
+# Local build output and toolchains
+/build/
+/.tools/
+
+# Python bytecode and local environments
+__pycache__/
+*.py[cod]
+.venv/
+
+# macOS metadata
+.DS_Store
