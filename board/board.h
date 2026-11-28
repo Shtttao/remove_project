@@ -5,8 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* main 启动时先调用一次，准备系统时钟、TIM2、SPI1、片选和 USART2。 */
+/* main 启动时先调用一次，准备系统时钟、TIM2、SPI1、片选、USART2 和状态灯。 */
 void board_init(void);
+/* 初始化后调用，on 表示点亮。PC0 的电平极性由板级代码处理。 */
+void board_status_led(bool on);
 /* 初始化后 TIM2 自由计数，每格 1 µs，约 71.6 分钟回绕一次。
    测量不足一个回绕周期的间隔时，用两个 uint32_t 时间戳直接相减。 */
 uint32_t board_micros(void);

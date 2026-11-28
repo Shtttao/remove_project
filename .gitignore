@@ -1,11 +1,74 @@
-# Local build output and toolchains
-/build/
-/.tools/
+# macOS、Windows 和编辑器临时文件
+.DS_Store
+._*
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+*.swp
+*.tmp
+*.log
+*~
 
-# Python bytecode and local environments
+# 本地工具链、缓存和虚拟环境
+/.tools/
+.cache/
 __pycache__/
 *.py[cod]
 .venv/
+.pytest_cache/
 
-# macOS metadata
-.DS_Store
+# CMake 和 CubeIDE 的生成目录、缓存及本机预设
+/out/
+/Debug/
+/Release/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+cmake_install.cmake
+CTestTestfile.cmake
+compile_commands.json
+.metadata/
+
+# 编译中间件，保留源码、工程配置、链接脚本和预编译库
+*.o
+*.obj
+*.d
+*.su
+*.gcda
+*.gcno
+*.dSYM/
+*.crf
+*.dep
+*.lnp
+*.lst
+*.uvguix.*
+*.uvopt
+*.uvoptx
+
+# Make 当前生成在 build/firmware/，仅放行这个目录顶层的四种最终镜像
+/build/*
+!/build/firmware/
+/build/firmware/*
+!/build/firmware/*.bin
+!/build/firmware/*.hex
+!/build/firmware/*.elf
+!/build/firmware/*.map
+
+# 独立的 /firmware/ 可用于归档上述四种镜像
+# 台架采集文件留在本机
+/capture.bin
+/capture.jsonl
+
+# 本地凭据，允许共享空白环境变量模板
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+.secrets/
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519

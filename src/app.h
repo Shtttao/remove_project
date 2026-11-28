@@ -33,5 +33,7 @@ typedef struct {
 void app_init(ImuApp *app);
 /* 由同一个前台循环反复调用；成功连接后，每轮最多处理一组新样本、发送一帧。 */
 void app_step(ImuApp *app, const AppIo *io);
+/* 当前时刻的期望灯态：离线快闪，在线校准时常亮，校准完成后慢闪。 */
+bool app_status_led_on(const ImuApp *app, uint32_t now);
 
 #endif

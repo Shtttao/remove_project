@@ -11,6 +11,16 @@ void app_init(ImuApp *app) {
     *app = (ImuApp){0};
 }
 
+bool app_status_led_on(const ImuApp *app, uint32_t now)
+{
+    /* TIM2 每微秒加一。第 17 位和第 19 位分别提供约 0.13 s 和 0.52 s 的半周期，
+     * 计数器回绕时仍按同样的节奏闪烁。掉线优先使用快闪，即使旧校准结果仍在。 */
+    if (!app->online) {
+        return (now & (1u << 17)) == 0u;
+    }
+    return !app->attitude.calibrated || (now & (1u << 19)) == 0u;
+}
+
 static void connect_sensor(ImuApp *app, const AppIo *io, uint32_t now) {
     /* 首次上电立即尝试；失败或掉线后至少间隔 500 ms，给传感器和接线恢复的时间。
      * 微秒时钟约每 71.6 分钟回绕一次，两个 uint32_t 时间戳相减仍能求短时间间隔。 */

@@ -83,10 +83,16 @@ int main(void) {
     app_init(&app);
     run_ms(&app, &io, 100); /* 上电时不接 IMU，应该保持静默，接入后再开始校准。 */
     assert(!app.online && frames == 0);
+    assert(app_status_led_on(&app, 0u) && !app_status_led_on(&app, 131072u));
     connected = true;
     regs[0x75] = 0x47;
-    run_ms(&app, &io, 3200);
+    run_ms(&app, &io, 600);
+    assert(app.online && !app.attitude.calibrated && frames == 0);
+    assert(app_status_led_on(&app, 131072u) && app_status_led_on(&app, 524288u));
+    run_ms(&app, &io, 2600);
     assert(app.online && app.attitude.calibrated);
+    assert(app_status_led_on(&app, 131072u) && !app_status_led_on(&app, 524288u));
+    assert(!app_status_led_on(&app, UINT32_MAX) && app_status_led_on(&app, 0u));
     assert(frames > 120 && sequence[0] == 0xa1 && sequence[1] == 0xa2 && sequence[2] == 0xa3);
     /* 三种帧轮流发送，截在任意时刻 A1 的帧数最多比 A3 多一帧。 */
     assert(kinds[1] >= kinds[3] && kinds[1] <= kinds[3] + 1);
@@ -100,6 +106,7 @@ int main(void) {
     data_stalled = true;
     run_ms(&app, &io, 200);
     assert(!app.online && previous == frames);
+    assert(!app_status_led_on(&app, 131072u)); /* 掉线后优先显示寻址状态。 */
     data_stalled = false;
     run_ms(&app, &io, 2300);
     assert(app.online && frames > previous && app.attitude.calibrated);
@@ -120,5 +127,5 @@ int main(void) {
     previous = frames;
     run_ms(&app, &io, 50);
     assert(!app.online && previous == frames && app.bus_errors > 0);
-    puts("PASS integrated firmware: retry, wraparound, calibration, A1/A2/A3, timing, TX failure, stale data, reconnect");
+    puts("PASS integrated firmware: retry, wraparound, calibration, status LED, A1/A2/A3, timing, TX failure, stale data, reconnect");
 }

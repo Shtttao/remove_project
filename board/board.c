@@ -33,18 +33,24 @@ void board_delay_ms(void *context, uint32_t ms)
     }
 }
 
-static void set_pin(unsigned int pin, uint32_t mode, uint32_t af, uint32_t pull)
+static void set_pin(GPIO_TypeDef *port, unsigned int pin, uint32_t mode, uint32_t af, uint32_t pull)
 {
-    /* 本板所选引脚均在 PA0～PA7。MODER、PUPDR、OSPEEDR 每脚占两位，
+    /* 本板所选引脚的端口内编号均小于 8。MODER、PUPDR、OSPEEDR 每脚占两位，
        AFR[0] 每脚占四位，MODIFY_REG 只改掩码覆盖的位，保留邻脚配置。 */
     uint32_t shift = 2u * pin;
-    GPIOA->OTYPER &= ~(1u << pin);
+    port->OTYPER &= ~(1u << pin);
     /* 推挽输出。pull 为 0、1、2 时分别表示无上下拉、上拉、下拉。 */
-    MODIFY_REG(GPIOA->PUPDR, 3u << shift, pull << shift);
-    MODIFY_REG(GPIOA->OSPEEDR, 3u << shift, 1u << shift);
-    MODIFY_REG(GPIOA->AFR[0], 15u << (4u * pin), af << (4u * pin));
+    MODIFY_REG(port->PUPDR, 3u << shift, pull << shift);
+    MODIFY_REG(port->OSPEEDR, 3u << shift, 1u << shift);
+    MODIFY_REG(port->AFR[0], 15u << (4u * pin), af << (4u * pin));
     /* 先准备复用编号，再接通引脚。mode=1 为普通输出，mode=2 接到复用外设。 */
-    MODIFY_REG(GPIOA->MODER, 3u << shift, mode << shift);
+    MODIFY_REG(port->MODER, 3u << shift, mode << shift);
+}
+
+void board_status_led(bool on)
+{
+    /* X Pulse 的 PC0 接状态灯阴极。低电平吸收电流点亮，高电平熄灭。 */
+    GPIOC->BSRR = on ? GPIO_BSRR_BR0 : GPIO_BSRR_BS0;
 }
 
 static void reset_spi(void)
@@ -87,9 +93,9 @@ void board_init(void)
     RCC->CCIPR5 &= ~RCC_CCIPR5_CKERPSEL;
     MODIFY_REG(RCC->CCIPR3, RCC_CCIPR3_SPI1SEL, RCC_CCIPR3_SPI1SEL_2);
     RCC->CCIPR1 &= ~RCC_CCIPR1_USART2SEL;
-    /* 打开 GPIOA、TIM2、USART2、SPI1 的总线时钟。读回 ENR 给门控生效留时间，
+    /* 打开 GPIOA/B/C、TIM2、USART2、SPI1 的总线时钟。读回 ENR 给门控生效留时间，
        再访问对应外设，避免刚开时钟时的首次寄存器写入丢失。 */
-    RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
+    RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN | RCC_AHB2ENR_GPIOBEN | RCC_AHB2ENR_GPIOCEN;
     (void)RCC->AHB2ENR;
     RCC->APB1LENR |= RCC_APB1LENR_TIM2EN | RCC_APB1LENR_USART2EN;
     (void)RCC->APB1LENR;
@@ -108,11 +114,15 @@ void board_init(void)
     /* BSRR 的 BS4 只将 PA4 置高，BR4 只将它拉低。先预置高电平再切输出，
        避免配置其余引脚时误选中低有效的 ICM-42688-P。 */
     GPIOA->BSRR = GPIO_BSRR_BS4;
-    set_pin(4u, 1u, 0u, 1u);  /* CS，空闲时拉高。 */
+    set_pin(GPIOA, 4u, 1u, 0u, 1u);
+    /* 同样先写输出电平，再把 PC0 切换到输出模式，避免初始化时状态灯闪一下。 */
+    board_status_led(false);
+    set_pin(GPIOC, 0u, 1u, 0u, 0u);
     reset_spi();
-    set_pin(5u, 2u, 5u, 2u);  /* AF5，SCK 由主机输出，模式 0 空闲时为低。 */
-    set_pin(6u, 2u, 5u, 1u);  /* AF5，MISO 接收传感器数据，弱上拉使开路读为 0xff。 */
-    set_pin(7u, 2u, 5u, 0u);  /* AF5，MOSI 发送寄存器地址、写入值及读操作的占位字节。 */
+    /* X Pulse 外部 SPI1 接口走 PB3/PB4/PB5，避开板载 QSPI 占用的 PA6/PA7。 */
+    set_pin(GPIOB, 3u, 2u, 5u, 2u);  /* SCK，模式 0 空闲时为低。 */
+    set_pin(GPIOB, 4u, 2u, 5u, 1u);  /* MISO，弱上拉使开路读为 0xff。 */
+    set_pin(GPIOB, 5u, 2u, 5u, 0u);  /* MOSI，主机发送寄存器地址和数据。 */
 
     /* 关闭串口后配置 8 数据位、无校验、1 停止位，保留 16 倍过采样。
        PRESC=0 表示时钟不分频。BRR 为时钟频率除以目标波特率并四舍五入。 */
@@ -122,7 +132,7 @@ void board_init(void)
     USART2->PRESC = 0u;
     USART2->BRR = (SystemCoreClock + UART_BAUD / 2u) / UART_BAUD;
     USART2->CR1 = USART_CR1_TE | USART_CR1_UE;
-    set_pin(2u, 2u, 7u, 1u);  /* AF7，USART2_TX，空闲为高，115200 8-N-1。 */
+    set_pin(GPIOA, 2u, 2u, 7u, 1u);  /* AF7，USART2_TX，空闲为高，115200 8-N-1。 */
 }
 
 static bool spi_wait(uint32_t flag, uint32_t start, uint32_t timeout_us)
